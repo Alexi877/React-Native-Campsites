@@ -1,10 +1,11 @@
 import React, { Component } from 'react';
 import { Text, View, ScrollView, FlatList,
-Modal, Button, StyleSheet } from 'react-native';
+Modal, Button, StyleSheet, Animated, Alert, PanResponder, Share } from 'react-native';
 import { Card, Icon, Rating, Input} from 'react-native-elements';
 import { connect } from 'react-redux';
 import { baseUrl } from '../shared/baseUrl';
 import { postFavorite, postComment } from '../redux/ActionCreators';
+import * as Animatable from 'react-native-animatable';
 
 const mapStateToProps = state => {
     return {
@@ -21,9 +22,67 @@ const mapDispatchToProps = {
 
 function RenderCampsite(props) {
     const {campsite} = props;
+
+    const view = React.createRef();
     
+    const recognizeDrag = ({dx}) => (dx < -200) ? true: false;
+
+    const panResponder = PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onPanResponderGrant: () => {
+            view.current.rubberBand(1000)
+            .then(endState => console.log(endState.finished? 'finished' : 'canceled'));
+        },
+        onPanResponderEnd: (e, gestureState) => {
+            console.log('pan responder end', gestureState);
+            if (recognizeDrag(gestureState)) {
+                Alert.alert(
+                    'Add Favorite',
+                    'Are you sure you wish to add' + campsite.name + 'to favorites?',
+                    [
+                     {
+                         text: 'Cancel',
+                         style: 'cancel',
+                         onPress: () => console.log('Cancel Pressed')
+                     },
+                     {
+                         text: 'OK',
+                         onPress: () => props.favorite ? 
+                         console.log('Already set as a favorite'): props.markFavorite()
+                     }
+                    ],
+                    {cancelable: false}
+                );
+            } else if (recognizeComment(gestureState))  {
+                props.onShowModal();
+            }
+            return true;
+        },
+        
+    })
+    const recognizeComment = ({dx}) => (dx > 200) ? true: false;
+
+    const shareCampsite = (title, message, url) => {
+        Share.share({
+            title,
+            message: `${title}: ${message} ${ url }`,
+            url
+        },{
+            dialogTitle: 'Share' + title
+        });
+    };
+
     if (campsite) {
         return (
+            <Animatable.View 
+            animation='fadeInDown' 
+            duration={2000} 
+            delay={1000}
+            ref={view}
+            {...panResponder.panHandlers}
+            
+            
+            >
             <Card
                 featuredTitle={campsite.name}
                 image={{uri: baseUrl + campsite.image}}>
@@ -49,8 +108,17 @@ function RenderCampsite(props) {
                  reverse
                  onPress={() => props.onShowModal()}
                  />
+                 <Icon
+                 name={'share'}
+                 type="font-awesome"
+                 color='#5637DD'
+                 raised
+                 reverse
+                 onPress={() => shareCampsite(campsite.name, campsite.description, baseUrl + campsite.image)}
+                 />
                 </View>
             </Card>
+            </ Animatable.View>
         );
     }
     return <View />;
@@ -70,6 +138,7 @@ function RenderComments({comments}) {
         )
     }
     return(
+        <Animatable.View animation='fadeInUp' duration={2000} delay={1000}>
         <Card title="Comments">
             <FlatList
             data={comments}
@@ -77,6 +146,7 @@ function RenderComments({comments}) {
             keyExtractor={item => item.id.toString()}
             />
         </Card>
+        </Animatable.View>
     )
 }
 class CampsiteInfo extends Component {
@@ -164,7 +234,7 @@ class CampsiteInfo extends Component {
                           title='Submit'
                           color='#5637DD'
                           onPress={() =>{
-                              this.handleComment();
+                              this.handleComment(campsiteId);
                               this.resetForm();
                           }} 
                           />
